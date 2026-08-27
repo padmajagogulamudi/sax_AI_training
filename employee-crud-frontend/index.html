@@ -1,0 +1,36 @@
+<html>
+    <head>
+        <title>index page</title>
+    </head>
+    <body>
+        <h1>Employee Management System</h1>
+        <form id="employeeForm">
+            <label>Employee Id:</label>
+            <input type="number" id="id">
+            <br><br> 
+            <label>Employee name:</label>
+            <input type="text" id="ename">
+            <br><br>
+            <label>Employee salary:</label>
+            <input type="number" id="salary">
+            <br><br>
+            <button type="submit">save Employee</button>
+        </form>
+        <br><br>
+        <h2>Employee  List:<h2>
+        <table border="3">
+            <thead>
+                <tr>
+                    <th>Id</th>
+                    <th>Name</th>
+                    <th>Salary</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="employeeTable">
+
+            </tbody>
+        </table>
+    <script src="script.js"></script>
+    </body>
+</html>
