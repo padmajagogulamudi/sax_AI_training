@@ -1,23 +1,21 @@
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, declarative_base
+import mysql.connector
 
-DATABASE_URL = "mysql+pymysql://root:root@localhost:3306/Practice"
 
-engine = create_engine(DATABASE_URL)
+def get_db_connection():
+    connection = mysql.connector.connect(
+        host="localhost",
+        user="root",
+        password="root",
+        database="flask_student_db"
+    )
 
-SessionLocal = sessionmaker(
-    autocommit=False,
-    autoflush=False,
-    bind=engine
-)
+    return connection
 
-Base = declarative_base()
-# with engine.connect() as connection:
-#     print("Database connected successfully!")
-def get_db():
-    db=SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-        
+
+if __name__ == "__main__":
+    connection = get_db_connection()
+
+    if connection.is_connected():
+        print("Database connected successfully")
+
+    connection.close()
