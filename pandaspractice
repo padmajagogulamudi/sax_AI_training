@@ -1,0 +1,20 @@
+pd.DataFrame()
+pd.read_csv()
+
+df.head()
+df.tail()
+
+df.shape
+df.columns
+df.info()
+df.describe()
+
+df["column"]
+
+df[["column1", "column2"]]
+
+df[df["Marks"] > 80]
+
+df.isnull().sum()
+df.dropna()
+df.fillna()
