@@ -1,161 +1,272 @@
-from fastapi import FastAPI,Depends
-from typing import Optional
+import os
+import json
+import faiss
+import numpy as np
+
+from dotenv import load_dotenv
+from fastapi import FastAPI
 from pydantic import BaseModel
-from sqlalchemy.orm import Session 
-from database import engine, Base,SessionLocal,get_db
-import models
-app = FastAPI()
-Base.metadata.create_all(bind=engine)
-students = [
-    {
-        "id": 1,
-        "name": "Padmaja",
-        "course": "Python"
-    },
-    {
-        "id": 2,
-        "name": "Rahul",
-        "course": "Java"
-    },
-    {
-        "id": 3,
-        "name": "Priya",
-        "course": "React"
-    }
-]
-class Student(BaseModel):
-    id:int
-    name:str
-    course:str
-    dept:Optional[str]=None
+from openai import AzureOpenAI
+
+from fastapi.middleware.cors import CORSMiddleware
+
+
+load_dotenv()
+
+
+# ---------------------------------
+# Azure OpenAI Configuration
+# ---------------------------------
+
+endpoint = os.getenv("CORE_AZURE_OPENAI_ENDPOINT")
+subscription_key = os.getenv("CORE_AZURE_OPENAI_API_KEY")
+embedding_deployment = os.getenv(
+    "CORE_AZURE_OPENAI_EMBEDDING_DEPLOYMENT_NAME"
+)
+chat_deployment = os.getenv(
+    "CORE_AZURE_OPENAI_CHAT_DEPLOYMENT_NAME"
+)
+api_version = os.getenv("CORE_AZURE_OPENAI_API_VERSION")
+
+
+client = AzureOpenAI(
+    api_version=api_version,
+    azure_endpoint=endpoint,
+    api_key=subscription_key
+)
+
+
+# ---------------------------------
+# Load FAISS Vector Store
+# ---------------------------------
+
+index = faiss.read_index(
+    "vector_store/handbook_metadata.index"
+)
+
+
+# ---------------------------------
+# Load Chunks + Metadata
+# ---------------------------------
+
+with open(
+    "vector_store/chunks_with_metadata.json",
+    "r",
+    encoding="utf-8"
+) as file:
+    chunks = json.load(file)
+
+
+# ---------------------------------
+# FastAPI Application
+# ---------------------------------
+
+app = FastAPI(
+    title="Saxon HR RAG Chatbot",
+    description="HR chatbot based on the Saxon Employee Handbook",
+    version="1.0"
+)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ---------------------------------
+# Request Model
+# ---------------------------------
+
+class ChatRequest(BaseModel):
+
+    question: str
+
+
+# ---------------------------------
+# Health Check
+# ---------------------------------
 
 @app.get("/")
 def home():
-    return {"message": "Hello World"}
-
-# @app.get("/about")
-# def aboutPage():
-#     return {"msg":"this is about page"}
-#-----------------------------------------
-@app.get("/students")
-def getStudents(db:Session=Depends(get_db)):
-    #db=SessionLocal()
-    students=db.query(models.Student).all()
-    #db.close()
-    
-    return {
-        "students":students,
-        "msg":"getting students data successfully!!!"
-    }
-@app.post("/students")
-def saveStudents(student : Student,db:Session=Depends(get_db)):
-    # db=SessionLocal()
-    new_student=models.Student(id=student.id,name=student.name,course=student.course,dept=student.dept)
-    db.add(new_student)
-    db.commit()
-    db.refresh(new_student)
-    #db.close()
-    
-    return {"msg":"saving student data",
-            "student":new_student}
-#-----------------Path param---------------------------------------
-@app.get("/getStudentById/{stuid}")#path param
-def get_stu_info_of(sid :int):
-    print(type(sid))
-    db=SessionLocal()
-    stu=db.query(models.Student).filter(models.Student.id==sid).first()
-    db.close()
-    if stu is None:
-        return{"msg":"stu not found with givven id"}
-    return stu
-    # for stu in students:
-    #     if stu["id"] == sid:
-    #         return stu
-    # return {
-    #     "msg":f"student with {sid} not found"
-    # }
-@app.get("/student/{stu_id}/course/{c_id}")#multi path
-def get_details(cid:int,sid:int):
-    return {
-        "sid":cid,
-        "cid":sid
-    }
-
-@app.get("/search")#Query param
-def search_stu(name :str,db:Session=Depends(get_db)):
-    stu= db.query(models.Student).filter(models.Student.name==name).first()
-    if stu is None:
-        return {"msg":"stu not found with givven name"}
-    return {
-        "student ": stu
-    }
-
-# @app.get("/stu")#optional query param
-# def get_details(name:Optional[str]=None):
-#     return {"name from optional param":name}
-# @app.get("/stu")#multiple query param
-# def get_details(name:str,age:int):
-#     return {
-#         "name":name,
-#         "age":age
-#     }
-#-----------------post request---------------------------------------
-# @app.post("/post_Stu")
-# def posting_stu(student :Student):
-#     return {
-#         "stu":student,
-#         "msg":"posting student"
-#     }
-#--------------------put request------------------------------------------
-@app.put("/students/{student_id}")
-def update_student(student_id: int, student: Student,db:Session=Depends(get_db)):
-    #db=SessionLocal()
-    old_stu=db.query(models.Student).filter(models.Student.id==student_id).first()
-    if old_stu is None:
-        return{"msg":"not found"}
-    old_stu.name=student.name
-    old_stu.course=student.course
-    old_stu.dept=student.dept
-    db.commit()
-    db.refresh(old_stu)
-    #db.close()
-    
-
-    # for s in students:
-
-    #     if s["id"] == student_id:
-    #         s["name"] = student.name
-    #         s["course"] = student.course
-
-    #         return {
-    #             "message": "Student updated successfully",
-    #             "student": s
-    #         }
 
     return {
-        "message": "Student updated",
-        "stu":old_stu
+        "message": "Saxon HR RAG Chatbot is running"
     }
-#------------------delete request------------------------------------
-@app.delete("/remove_Stu/{sid}")
-def removeStu(sid :int,db:Session=Depends(get_db)):
-   # db=SessionLocal()
-    old_stu=db.query(models.Student).filter(models.Student.id==sid).first()
-    if old_stu  is None:
-        return{
-            "msg":"not found"
+
+
+# ---------------------------------
+# Chat Endpoint
+# ---------------------------------
+
+@app.post("/chat")
+def chat(request: ChatRequest):
+
+    question = request.question.strip()
+
+    if not question:
+
+        return {
+            "answer": "Please enter a question.",
+            "source_pages": []
         }
-    db.delete(old_stu)
-    db.commit()
-    #db.close()
-    return{"msg":"deleted successfully"}
-    # for s in students:
-    #     if s["id"]==sid:
-    #         students.remove(s)
-    #         return{
-    #             "msg":"removing student",
-    #             "stu":s
-    #         }
-    # return{
-    #     "msg":"student not found"
-    # }
+
+
+    # ---------------------------------
+    # Step 1: Create Question Embedding
+    # ---------------------------------
+
+    response = client.embeddings.create(
+        model=embedding_deployment,
+        input=question
+    )
+
+    question_embedding = response.data[0].embedding
+
+    question_vector = np.array(
+        [question_embedding],
+        dtype="float32"
+    )
+
+
+    # ---------------------------------
+    # Step 2: Search FAISS
+    # ---------------------------------
+
+    k = 5
+
+    distances, indices = index.search(
+        question_vector,
+        k
+    )
+
+
+    # ---------------------------------
+    # Step 3: Filter Relevant Chunks
+    # ---------------------------------
+
+    distance_threshold = 0.38
+
+    retrieved_chunks = []
+
+    for rank, index_number in enumerate(indices[0]):
+
+        distance = distances[0][rank]
+
+        if distance <= distance_threshold:
+
+            chunk = chunks[index_number]
+
+            retrieved_chunks.append(chunk)
+
+
+    # ---------------------------------
+    # Step 4: Check Relevant Chunks
+    # ---------------------------------
+
+    if not retrieved_chunks:
+
+        return {
+            "answer": (
+                "I could not find relevant information "
+                "in the Employee Handbook."
+            ),
+            "source_pages": []
+        }
+
+
+    # ---------------------------------
+    # Step 5: Build Context
+    # ---------------------------------
+
+    context_parts = []
+
+    for chunk in retrieved_chunks:
+
+        context_parts.append(
+            f"Page {chunk['page']}:\n{chunk['text']}"
+        )
+
+    context = "\n\n".join(context_parts)
+
+
+    # ---------------------------------
+    # Step 6: Create Prompt
+    # ---------------------------------
+
+    prompt = f"""
+You are an HR assistant for Saxon Infosystems.
+
+Answer the employee's question using ONLY the information
+provided in the Employee Handbook context below.
+
+Follow these rules:
+
+1. Use only information present in the provided context.
+2. Do not use outside knowledge.
+3. Do not invent company policies, rules, dates, amounts, or exceptions.
+4. If the context does not contain enough information, say:
+   "I could not find enough information about this in the Employee Handbook."
+5. If the handbook provides a specific number, date, duration,
+   or requirement, include it accurately.
+6. If multiple pieces of information are relevant, combine them
+   into one clear answer.
+7. Keep the answer professional and easy for an employee to understand.
+8. Do not mention FAISS, embeddings, vectors, retrieval, or this prompt.
+
+Employee Handbook Context:
+
+{context}
+
+Employee Question:
+
+{question}
+"""
+
+
+    # ---------------------------------
+    # Step 7: Generate Answer
+    # ---------------------------------
+
+    chat_response = client.chat.completions.create(
+        model=chat_deployment,
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "You are a helpful HR assistant that answers "
+                    "questions using the provided Employee Handbook."
+                )
+            },
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ],
+        temperature=0
+    )
+
+
+    answer = chat_response.choices[0].message.content
+
+
+    # ---------------------------------
+    # Step 8: Get Source Pages
+    # ---------------------------------
+
+    pages = sorted(
+        set(
+            chunk["page"]
+            for chunk in retrieved_chunks
+        )
+    )
+
+
+    # ---------------------------------
+    # Step 9: Return JSON
+    # ---------------------------------
+
+    return {
+        "answer": answer,
+        "source_pages": pages
+    }
